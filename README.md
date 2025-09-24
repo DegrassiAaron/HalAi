@@ -71,15 +71,19 @@ Tutte le cartelle persistenti contengono un file `.gitkeep` per mantenere la str
    cp .env.example .env
    ```
 3. Aggiornare `.env` con i domini, le credenziali e le chiavi desiderate.
-4. Avviare l'infrastruttura base:
+4. Costruire l'immagine personalizzata di ComfyUI (necessario al primo avvio, altrimenti Docker tenterà di scaricare un'immagine inesistente `halai-comfyui`):
+   ```bash
+   docker compose build comfyui
+   ```
+5. Avviare l'infrastruttura base:
    ```bash
    docker compose up -d
    ```
-5. (Opzionale) Abilitare GPU con file di override:
+6. (Opzionale) Abilitare GPU con file di override:
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
    ```
-6. Creare record DNS locali (es. tramite file `hosts`) puntando i domini configurati all'host Docker.
+7. Creare record DNS locali (es. tramite file `hosts`) puntando i domini configurati all'host Docker.
 
 Traefik genererà automaticamente certificati Let's Encrypt per i domini pubblicamente raggiungibili. In ambienti locali è possibile utilizzare certificati self-signed o disabilitare l'HTTPS modificando le variabili d'ambiente di Traefik.
 
