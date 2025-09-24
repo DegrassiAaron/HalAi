@@ -104,6 +104,8 @@ Traefik genererà automaticamente certificati Let's Encrypt per i domini pubblic
 - Aggiornare i servizi eseguendo `docker compose pull` seguito da `docker compose up -d`.
 - Monitorare i log con `docker compose logs -f <nome-servizio>`.
 - In caso di errori Traefik sui certificati, eliminare `traefik_letsencrypt/acme.json` (verrà rigenerato) e riavviare.
+- Il container di ComfyUI viene costruito localmente a partire dal repository ufficiale (vedi `docker/comfyui/`). È possibile
+  selezionare un branch o tag specifico impostando la variabile `COMFYUI_GIT_REF` nel file `.env`.
 
 ---
 
