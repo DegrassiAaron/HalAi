@@ -1,0 +1,181 @@
+version: "3.9"
+
+services:
+  traefik:
+    image: traefik:v2.11
+    restart: unless-stopped
+    command:
+      - --log.level=${TRAEFIK_LOG_LEVEL}
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik_letsencrypt:/letsencrypt
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ}
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >-
+      sh -c 'if [ -n "${REDIS_PASSWORD}" ]; then redis-server --requirepass ${REDIS_PASSWORD}; else redis-server; fi'
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - redis-data:/data
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: ${N8N_PORT}
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+      N8N_API_BASE_URL: ${N8N_API_BASE_URL}
+      N8N_JWT_SECRET: ${N8N_JWT_SECRET}
+      N8N_METRICS: "true"
+      N8N_EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: ${QUEUE_BULL_REDIS_HOST}
+      QUEUE_BULL_REDIS_PORT: ${QUEUE_BULL_REDIS_PORT}
+      QUEUE_BULL_REDIS_DB: ${QUEUE_BULL_REDIS_DB}
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+      - ./media:/data/media
+      - ./workflows:/data/workflows
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls=true"
+      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.services.n8n.loadbalancer.server.port=${N8N_PORT}"
+
+  n8n-worker:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_JWT_SECRET: ${N8N_JWT_SECRET}
+      N8N_METRICS: "true"
+      N8N_EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: ${QUEUE_BULL_REDIS_HOST}
+      QUEUE_BULL_REDIS_PORT: ${QUEUE_BULL_REDIS_PORT}
+      QUEUE_BULL_REDIS_DB: ${QUEUE_BULL_REDIS_DB}
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      EXECUTIONS_PROCESS: main
+      TZ: ${TZ}
+    command: n8n worker
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_ORIGINS: "*"
+      OLLAMA_KEEP_ALIVE: "24h"
+      OLLAMA_GPU: ${OLLAMA_GPU}
+    volumes:
+      - ./models/ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    labels:
+      - "traefik.enable=false"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      WEBUI_NAME: HalAI WebUI
+      TZ: ${TZ}
+    volumes:
+      - ./openwebui_data:/app/backend/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openwebui.rule=Host(`${OPEN_WEBUI_DOMAIN}`)"
+      - "traefik.http.routers.openwebui.entrypoints=websecure"
+      - "traefik.http.routers.openwebui.tls=true"
+      - "traefik.http.routers.openwebui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.openwebui.loadbalancer.server.port=8080"
+
+  comfyui:
+    image: ghcr.io/comfyanonymous/comfyui:latest
+    restart: unless-stopped
+    environment:
+      - CLI_ARGS=--listen 0.0.0.0 --port 8188
+    volumes:
+      - ./models/comfyui:/root/.cache/ComfyUI
+      - ./media:/root/ComfyUI/output
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comfyui.rule=Host(`${COMFYUI_DOMAIN}`)"
+      - "traefik.http.routers.comfyui.entrypoints=websecure"
+      - "traefik.http.routers.comfyui.tls=true"
+      - "traefik.http.routers.comfyui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.comfyui.loadbalancer.server.port=8188"
+
+volumes:
+  redis-data:

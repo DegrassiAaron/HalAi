@@ -1,0 +1,35 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+
+# Editor folders
+.vscode/
+.idea/
+
+# Runtime data directories
+n8n_data/*
+!n8n_data/.gitkeep
+postgres_data/*
+!postgres_data/.gitkeep
+traefik_letsencrypt/*
+!traefik_letsencrypt/.gitkeep
+media/*
+!media/.gitkeep
+openwebui_data/*
+!openwebui_data/.gitkeep
+workflows/*
+!workflows/.gitkeep
+models/*
+!models/.gitkeep
+!models/ollama/
+!models/comfyui/
+models/ollama/*
+!models/ollama/.gitkeep
+models/comfyui/*
+!models/comfyui/.gitkeep
+
+# Logs
+*.log
