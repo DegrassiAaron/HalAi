@@ -113,5 +113,21 @@ Traefik genererà automaticamente certificati Let's Encrypt per i domini pubblic
 
 ---
 
+## 🧪 Test e validazione configurazione
+Il repository include test automatici (approccio **TDD**) per verificare la correttezza del file `.env`.
+
+1. Installare le dipendenze di sviluppo:
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+2. Eseguire la suite di test `pytest`:
+   ```bash
+   pytest
+   ```
+
+I test validano sintassi e valori fondamentali del file `.env.example`, aiutando a mantenere la configurazione coerente durante le modifiche.
+
+---
+
 ## 📜 Licenza
 Distribuito con licenza [MIT](LICENSE).
